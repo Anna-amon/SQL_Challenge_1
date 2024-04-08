@@ -1,9 +1,18 @@
-# SQL_Challenge_1
+## This is my own analysis of number 4 case study from the 8 Week SQL Challenge 
+
+https://8weeksqlchallenge.com/
+
+![image](https://github.com/Anna-amon/SQL_Challenge_1/assets/144830015/86631358-7fdd-42fe-893c-5b29bf8e65d4)
+
+Here is the ER diagram, so we can see the tables and relations for the database. 
+
+![image](https://github.com/Anna-amon/SQL_Challenge_1/assets/144830015/9781416b-fef3-4fdf-a73c-b525fe7d5e8d)
 
 ## A. Customer Nodes Exploration
 
 **How many unique nodes are there on the Data Bank system?**
 
+Firstly, let explore our table, and use our wild card character - * - to return all records in the table:
 ```sql
     SELECT *
     FROM data_bank.customer_nodes
@@ -27,6 +36,8 @@
 
 **What is the number of nodes per region?**
 
+We need to use the DISTINCT statement here, to ensure we remove duplicate node_id's. 
+
 ```sql
     SELECT COUNT(DISTINCT node_id) AS unique_nodes
     FROM data_bank.customer_nodes;
@@ -38,6 +49,8 @@
 
 ---
 **How many customers are allocated to each region?**
+
+Here, we need to consider the regions table. Both the customer_nodes and regions tables contain the region_id, so we may consider this query just in relation to the region_id. It depends whether wr want to keep the region_name. If we do want the region name, the query will be slightly more complex as we will need to join the table together. We can use an INNER JOIN to do so, and join on region_id. Lets also use an alias, for the tables, to make things clearer.
 
 ```sql
     SELECT *
@@ -52,23 +65,6 @@
 | 3         | Africa      |
 | 4         | Asia        |
 | 5         | Europe      |
-
-```sql
-    SELECT r.region_name, c.region_id, COUNT(c.node_id) AS node_count
-    FROM data_bank.customer_nodes AS c
-    INNER JOIN data_bank.regions AS r ON c.region_id = r.region_id
-    GROUP BY r.region_name, c.region_id
-    ORDER BY node_count DESC;
-```
-
-| region_name | region_id | node_count |
-| ----------- | --------- | ---------- |
-| Australia   | 1         | 770        |
-| America     | 2         | 735        |
-| Africa      | 3         | 714        |
-| Asia        | 4         | 665        |
-| Europe      | 5         | 616        |
-
 
 ```sql
     SELECT r.region_name, c.region_id, COUNT(DISTINCT c.customer_id) AS customer_id
@@ -88,6 +84,7 @@
 
 ---
 
+We can use the DateDiff function here, alongside the AVG. However, there appears to be a problem with the result. 
 **How many days on average are customers reallocated to a different node?**
 ```sql
     SELECT AVG(end_date - start_date) AS DateDiff
@@ -98,6 +95,7 @@
 | ------------------- |
 | 416373.411714285714 |
 
+Its unlikely the time between the end and start date of a node is 400,000+ days. Lets explore the data (this limits to the bottom ten rows where we can see the problem).
 
 ```sql
     SELECT *
@@ -119,7 +117,7 @@
 | 4           | 5         | 3       | 2020-04-02T00:00:00.000Z | 9999-12-31T00:00:00.000Z |
 | 10          | 3         | 2       | 2020-03-19T00:00:00.000Z | 9999-12-31T00:00:00.000Z |
 
-
+Lets query this again, but remove - != - all instances of the incorrect date occurences 9999-12-31.
 ```sql
     SELECT AVG(end_date - start_date) AS DateDiff
     FROM data_bank.customer_nodes
@@ -132,6 +130,9 @@
 
 ---
 **What is the median, 80th, and 95th percentile for this same reallocation days metric for each region?**
+
+There are are different ways to perform this query. The simplest may be the PERCENTILE_CONT fuinction computes the percentile value, after ordering the rows. 
+
 ```sql
     WITH DateDiffs AS (
         SELECT region_id, (end_date - start_date) AS DateDiff
