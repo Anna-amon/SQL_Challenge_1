@@ -156,3 +156,135 @@ There are are different ways to perform this query. The simplest may be the PERC
 | 3         | 15             | 24                | 28                    |
 | 4         | 15             | 23                | 28                    |
 | 5         | 15             | 24                | 28                    |
+
+## B. Customer Transactions
+
+What is the unique count and total amount for each transaction type?
+
+Firstly, we can explore the database:
+```sql
+SELECT * 
+FROM data_bank.customer_transactions
+LIMIT 10;
+```
+
+| customer_id | txn_date                 | txn_type | txn_amount |
+| ----------- | ------------------------ | -------- | ---------- |
+| 429         | 2020-01-21T00:00:00.000Z | deposit  | 82         |
+| 155         | 2020-01-10T00:00:00.000Z | deposit  | 712        |
+| 398         | 2020-01-01T00:00:00.000Z | deposit  | 196        |
+| 255         | 2020-01-14T00:00:00.000Z | deposit  | 563        |
+| 185         | 2020-01-29T00:00:00.000Z | deposit  | 626        |
+| 309         | 2020-01-13T00:00:00.000Z | deposit  | 995        |
+| 312         | 2020-01-20T00:00:00.000Z | deposit  | 485        |
+| 376         | 2020-01-03T00:00:00.000Z | deposit  | 706        |
+| 188         | 2020-01-13T00:00:00.000Z | deposit  | 601        |
+| 138         | 2020-01-11T00:00:00.000Z | deposit  | 520        |
+
+```sql
+SELECT txn_type, COUNT(txn_type) AS unique_count, SUM(txn_amount) AS total_amount 
+FROM data_bank.customer_transactions
+GROUP BY txn_type
+ORDER BY unique_count DESC;
+```
+
+| txn_type   | unique_count | total_amount |
+| ---------- | ------------ | ------------ |
+| deposit    | 2671         | 1359168      |
+| purchase   | 1617         | 806537       |
+| withdrawal | 1580         | 793003       |
+
+
+What is the average total historical deposit counts and amounts for all customers?
+
+One way of doing this is to use two seperate sub querys. We will use a sub-query, firstly to gather a sum of all deposit transactions for each customer. Then, we will find the average of these. 
+
+```sql
+    SELECT AVG(deposit_amount) AS average_deposit_amount
+    FROM (
+        SELECT customer_id, SUM(txn_amount) AS deposit_amount
+        FROM data_bank.customer_transactions
+        WHERE txn_type = 'deposit'
+        GROUP BY customer_id
+    ) AS customer_deposit_amounts;
+```
+If we run the sub-query by itself, we get this result:
+
+| customer_id | deposit_amount |
+|-------------|----------------|
+| 1           | 636            |
+| 2           | 610            |
+| 3           | 637            |
+| 4           | 848            |
+| 5           | 2910           |
+
+The outer query then finds the average, and provides us with:
+
+| average_deposit_amount |
+| ---------------------- |
+| 2718.3360000000000000  |
+
+We can then run the same for deposit counts:
+
+```sql
+    SELECT AVG(deposit_count) AS average_deposit_counts
+    FROM (SELECT customer_id, COUNT (txn_amount) AS deposit_count
+          FROM data_bank.customer_transactions
+          WHERE txn_type = 'deposit'
+          GROUP BY customer_id
+    ) AS customer_deposit_counts;
+```
+
+| average_deposit_counts |
+| ---------------------- |
+| 5.3420000000000000     |
+
+However, this is not really the most concise way. Instead we may use the WITH clause.
+
+```sql
+    WITH historical_averages AS
+    (SELECT customer_id, 
+          COUNT(*) AS deposit_count,
+          SUM(txn_amount) AS deposit_amount
+     FROM data_bank.customer_transactions
+     WHERE txn_type = 'deposit'
+     GROUP BY customer_id
+    )
+     
+    SELECT 
+        AVG(deposit_count) AS average_deposit_count,
+        AVG(deposit_amount) AS average_deposit_amount
+    FROM historical_averages;
+```
+
+| average_deposit_count | average_deposit_amount |
+| --------------------- | ---------------------- |
+| 5.3420000000000000    | 2718.3360000000000000  |
+
+
+For each month - how many Data Bank customers make more than 1 deposit and either 1 purchase or 1 withdrawal in a single month?
+
+Again, we can use WITH clause, but with the COUNT function and CASE statement to count transaction types when specific criteria needs to be met. Once we have this temporary reference using the WITH clause we can then query this to only select customers who match criteria of a deposit and a purchase and/or withdrawl. 
+
+    WITH txn_types_customers AS (
+      SELECT customer_id, 
+        COUNT(CASE WHEN txn_type = 'deposit' THEN 1 ELSE NULL END) AS deposit_count,
+        COUNT(CASE WHEN txn_type = 'purchase' THEN 1 ELSE NULL END) AS purchase_count,
+        COUNT(CASE WHEN txn_type = 'withdrawal' THEN 1 ELSE NULL END) AS withdrawal_count
+      FROM 
+        data_bank.customer_transactions
+      GROUP BY 
+        customer_id
+    )
+    
+    SELECT COUNT(customer_id)
+    FROM txn_types_customers
+    WHERE deposit_count > 0 AND (purchase_count > 0 OR withdrawal_count > 0);
+
+| count |
+| ----- |
+| 485   |
+
+
+What is the closing balance for each customer at the end of the month?
+What is the percentage of customers who increase their closing balance by more than 5%?
